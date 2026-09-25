@@ -273,7 +273,7 @@
 
   // DATE-BASED SCHEDULE (IST). Change these two complete date/time values.
   // Example: 26 Sep 2026, 5:20 PM IST -> 5:30 PM IST. Keep seconds as :00.
-  const OPEN_AT = '2026-09-25T21:10:00+05:30';
+  const OPEN_AT = '2026-09-25T21:20:00+05:30';
   const DESTROY_AT = '2026-09-25T21:30:00+05:30';
 
   // Keep your existing background music filename exactly as you have it.
@@ -465,13 +465,17 @@
 
   function tick() {
     const parts = istParts();
-    const nowMs = istComparableMs(parts);
+    // Compare everything using absolute timestamps. OPEN_MS/DESTROY_MS come from
+    // the date-based ISO values above, so Date.now() must be used here too.
+    const nowMs = Date.now();
 
     liveClock.textContent = `Current IST: ${pad(parts.hour)}:${pad(parts.minute)}:${pad(parts.second)}`;
     istLabel.textContent = `IST • ${pad(parts.hour)}:${pad(parts.minute)}`;
 
     try {
-      if (localStorage.getItem(DESTROY_KEY) === '1') {
+      // Only honor the stored destroyed flag once the real destroy time has passed.
+      // This prevents a stale browser flag from hiding a newly scheduled future release.
+      if (Date.now() >= DESTROY_MS && localStorage.getItem(DESTROY_KEY) === '1') {
         showDestroy();
         return;
       }
