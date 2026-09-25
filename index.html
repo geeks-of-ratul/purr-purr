@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
   <meta name="theme-color" content="#18131d">
   <meta name="description" content="A tiny cat-themed birthday page.">
-  <title>A Little Cat Corner 🐾❤️</title>
+  <title>A Little Cat Corner 🐾</title>
   <style>
     :root{
       --ink:#40323b;
@@ -273,8 +273,8 @@
 
   // DATE-BASED SCHEDULE (IST). Change these two complete date/time values.
   // Example: 26 Sep 2026, 5:20 PM IST -> 5:30 PM IST. Keep seconds as :00.
-  const OPEN_AT = '2026-09-25T21:50:00+05:30';
-  const DESTROY_AT = '2026-09-25T22:10:00+05:30';
+  const OPEN_AT = '2026-09-25T23:00:00+05:30';
+  const DESTROY_AT = '2026-09-25T23:05:00+05:30';
 
   // Keep your existing background music filename exactly as you have it.
   const MUSIC_URL = 'assets/meow.mp3';
@@ -306,7 +306,11 @@
   const audio = document.getElementById('birthdayAudio');
 
   audio.src = MUSIC_URL;
+  audio.preload = 'auto';
+  audio.loop = true;
+  audio.playsInline = true;
   const meowButtonAudio = new Audio(MEOW_BUTTON_URL);
+  meowButtonAudio.preload = 'auto';
   meowButtonAudio.preload = 'auto';
   if (openLabel) openLabel.textContent = scheduleLabel(OPEN_AT);
 
@@ -390,17 +394,39 @@
     audio.currentTime = 0;
   }
 
-  function startMusic() {
-    audio.volume = 0.62;
+  let audioUnlocked = false;
 
-    const play = () => audio.play().catch(() => false);
-    play().then(started => {
-      if (started === false) {
-        const retry = () => audio.play().catch(() => {});
-        document.addEventListener('pointerdown', retry, { once: true, passive: true });
-        document.addEventListener('keydown', retry, { once: true });
-      }
-    });
+  async function unlockAudioForLater() {
+    if (audioUnlocked) return;
+    try {
+      const wasMuted = audio.muted;
+      audio.muted = true;
+      await audio.play();
+      audio.pause();
+      audio.currentTime = 0;
+      audio.muted = wasMuted;
+      audioUnlocked = true;
+    } catch {}
+  }
+
+  // A silent priming step on the first user interaction gives the browser a chance
+  // to permit the real soundtrack to autoplay later when the countdown reaches zero.
+  document.addEventListener('pointerdown', unlockAudioForLater, { once: true, passive: true });
+  document.addEventListener('keydown', unlockAudioForLater, { once: true });
+
+  async function startMusic() {
+    audio.volume = 0.62;
+    audio.muted = false;
+
+    try {
+      await audio.play();
+      audioUnlocked = true;
+      return true;
+    } catch {
+      // The browser may block audible autoplay. The MEOW button is a direct
+      // user gesture and will retry the soundtrack from the click event.
+      return false;
+    }
   }
 
   function launchConfetti() {
@@ -429,12 +455,14 @@
     startMusic();
   }
 
-  function playCustomMeow() {
+  async function playCustomMeow() {
     meowButtonAudio.currentTime = 0;
-    meowButtonAudio.play().catch(() => {
+    try {
+      await meowButtonAudio.play();
+    } catch {
       // Keep the button working even if the custom file is not present yet.
       shortMeow();
-    });
+    }
   }
 
   function shortMeow() {
@@ -519,9 +547,14 @@
     surprisePanel.classList.add('hidden');
   });
 
-  document.getElementById('meowBtn').addEventListener('click', () => {
-    playCustomMeow();
-    startMusic();
+  document.getElementById('meowBtn').addEventListener('click', async () => {
+    // One click intentionally triggers BOTH sounds: the custom meow + the
+    // Happy-Birthday background track. A real user gesture should satisfy
+    // normal browser autoplay policies for this click.
+    await Promise.allSettled([
+      playCustomMeow(),
+      startMusic()
+    ]);
   });
 
   document.querySelectorAll('.mood').forEach(btn => {
